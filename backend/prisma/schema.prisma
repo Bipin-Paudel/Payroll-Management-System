@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  
+}
+
+enum EntityType {
+  SOLE_PROPRIETOR
+  PARTNERSHIP
+  PVT_LTD
+  NGO
+  OTHER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  hashedRt  String?
+
+  // ✅ 1 User -> 1 Company
+  company   Company?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Company {
+  id         String   @id @default(cuid())
+  name       String
+  entityType EntityType
+  panVat     String  @unique
+  address    String
+  phone      String
+  email      String?
+
+  //  1 Company -> 1 User (Owner)
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//  Opposite relations (REQUIRED)
+  roles          Role[]
+  departments    Department[]
+  paymentMethods PaymentMethod[]
+  employees      Employee[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([panVat])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  employees   Employee[]
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  employees   Employee[]
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model PaymentMethod {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+// Employee record creation
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model Employee {
+  id              String   @id @default(cuid())
+  companyId        String
+  departmentId     String
+  roleId           String
+
+  name             String
+  panNo            String?
+  gender           Gender
+  disability       Boolean  @default(false)
+
+  // From your form: NepaliDateInput gives both
+  dateOfJoiningAd  DateTime?
+  dateOfJoiningBs  String?
+
+  // Insurance amounts (store as integer amounts)
+  lifeInsurance    Int      @default(0)
+  healthInsurance  Int      @default(0)
+  houseInsurance   Int      @default(0)
+
+  company          Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department       Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  role             Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, departmentId])
+  @@index([companyId, roleId])
+  @@unique([companyId, panNo])
+}
