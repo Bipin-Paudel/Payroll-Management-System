@@ -22,7 +22,6 @@ type NepaliDateInputProps = {
 
 const pad2 = (n: any) => String(n ?? "").padStart(2, "0");
 
-// ✅ payload बाट BS date string "YYYY-MM-DD" निकाल्ने (string / object / nested payload सबै handle)
 function normalizeBs(p: any): string {
   const v =
     p?.bsDate ??
@@ -35,10 +34,9 @@ function normalizeBs(p: any): string {
 
   if (typeof v === "string") return v.trim();
 
-  // object case: { year, month, day }
   const y = v?.year ?? v?.y;
   const m = v?.month ?? v?.m;
-  const d = v?.day ?? v?.d;
+  const d = v?.date ?? v?.day ?? v?.d;
 
   if (y && m && d) return `${y}-${pad2(m)}-${pad2(d)}`.trim();
   return "";
@@ -58,64 +56,70 @@ function normalizeAd(p: any): string {
 
   const y = v?.year ?? v?.y;
   const m = v?.month ?? v?.m;
-  const d = v?.day ?? v?.d;
+  const d = v?.date ?? v?.day ?? v?.d;
 
   if (y && m && d) return `${y}-${pad2(m)}-${pad2(d)}`.trim();
   return "";
 }
 
+/**
+ * ✅ IMPORTANT:
+ * This datepicker most reliably prefills with { year, month, date } (not day).
+ * If no valid BS date, we must NOT pass "value" at all — otherwise it shows today's date.
+ */
+function bsStringToObj(bs?: string) {
+  if (!bs) return null;
+
+  const s = bs.trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const date = Number(m[3]);
+
+  // ✅ prevent NaN error
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(date)) return null;
+  if (year <= 0 || month <= 0 || date <= 0) return null;
+
+  // ✅ best-supported shape
+  return { year, month, date };
+}
+
 export function NepaliDateInput({
-  valueAd,
   valueBs,
   onChangeAd,
   placeholder,
   className,
 }: NepaliDateInputProps) {
-  // ✅ Remount ONLY when cleared, not on every selection
-  const [resetKey, setResetKey] = React.useState(0);
-  const wasEmptyRef = React.useRef(true);
-
-  React.useEffect(() => {
-    const isEmpty = !(valueBs && valueBs.trim());
-
-    if (!isEmpty && wasEmptyRef.current) {
-      wasEmptyRef.current = false;
-    }
-    if (isEmpty && !wasEmptyRef.current) {
-      setResetKey((k) => k + 1);
-      wasEmptyRef.current = true;
-    }
-
-    if (isEmpty) wasEmptyRef.current = true;
-  }, [valueBs]);
+  const parsed = React.useMemo(() => bsStringToObj(valueBs), [valueBs]);
 
   const handleChange = (payload: any) => {
     const bsDate = normalizeBs(payload);
     const adDate = normalizeAd(payload);
 
-    // ✅ BS date नै required (period derive गर्न)
     if (!bsDate) return;
-
     onChangeAd(adDate, bsDate);
   };
 
   return (
     <div className={cn("np-date relative w-full", className)}>
       <Calendar
-        key={`np-${resetKey}`}
+        // ✅ if parsed exists => prefill that exact date
+        // ✅ if parsed missing => DON'T pass value, and hide default (prevents today's date)
+        {...(parsed ? { value: parsed, hideDefaultValue: false } : { hideDefaultValue: true })}
+
+        onChange={handleChange}
+        language="ne"
+        dateFormat="YYYY-MM-DD"
+        placeholder={placeholder ?? "Select date"}
+        theme="default"
         className={cn(
-          "w-full h-11 rounded-xl border border-input bg-background px-3 text-sm",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          "h-11 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs placeholder:text-muted-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           "transition-colors"
         )}
         style={{ width: "100%" }}
-        language="ne"
-        dateFormat="YYYY-MM-DD"
-        placeholder={placeholder ?? "मिति छान्नुहोस्"}
-        onChange={handleChange}
-        theme="default"
-        hideDefaultValue={true}
-        value={valueBs || ""}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import {
-  BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -33,7 +33,8 @@ export class PaymentMethodsService {
         },
       });
     } catch (e: any) {
-      throw new BadRequestException("Payment method name already exists.");
+      // ✅ duplicates should be 409 in multi-tenant systems
+      throw new ConflictException("Payment method name already exists.");
     }
   }
 
@@ -60,11 +61,13 @@ export class PaymentMethodsService {
         data: {
           name: dto.name ? dto.name.trim() : undefined,
           description:
-            dto.description !== undefined ? dto.description.trim() || null : undefined,
+            dto.description !== undefined
+              ? dto.description.trim() || null
+              : undefined,
         },
       });
     } catch (e: any) {
-      throw new BadRequestException("Payment method name already exists.");
+      throw new ConflictException("Payment method name already exists.");
     }
   }
 
@@ -76,7 +79,23 @@ export class PaymentMethodsService {
     });
     if (!existing) throw new NotFoundException("Payment method not found.");
 
-    await this.prisma.paymentMethod.delete({ where: { id } });
-    return { success: true };
+
+
+    try {
+      await this.prisma.paymentMethod.delete({ where: { id } });
+      return { success: true };
+    } catch (e: any) {
+  
+      const prismaCode = e?.code;
+      const message = String(e?.message || "");
+
+      if (prismaCode === "P2003" || message.includes("violates foreign key")) {
+        throw new ConflictException(
+          "Cannot delete this payment method because it is being used in other records. Please update those records first."
+        );
+      }
+
+      throw e;
+    }
   }
 }

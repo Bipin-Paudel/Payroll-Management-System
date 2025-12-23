@@ -1,3 +1,5 @@
+"use client";
+
 import DepartmentCreateForm from '@/components/settings/DepartmentCreateForm'
 import React from 'react'
 

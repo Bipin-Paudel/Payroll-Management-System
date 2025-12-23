@@ -2,16 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 type Props = {
   inDialog?: boolean;
   onCancel?: () => void;
   onCreated?: (dept: { id: string; name: string }) => void;
 };
-
-function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
 
 const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3333/api";
 
@@ -111,10 +108,7 @@ export default function DepartmentCreateForm({
       const data = await safeJson(res);
 
       // try to extract created dept
-      const created =
-        data?.data ??
-        data ??
-        null;
+      const created = data?.data ?? data ?? null;
 
       const createdDept = {
         id: created?.id || "",
@@ -151,13 +145,13 @@ export default function DepartmentCreateForm({
 
   return (
     <div className="w-full">
-      {/* ✅ Show page header only when NOT in dialog */}
+      {/* Page header only when NOT in dialog */}
       {!inDialog && (
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
+        <div className="mb-6">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
             Create Department
           </h1>
-          <p className="mt-2 text-sm md:text-base text-gray-600">
+          <p className="mt-1 text-sm text-muted-foreground">
             Add a department to organize employees (e.g., HR, Finance, Operations).
           </p>
         </div>
@@ -168,17 +162,18 @@ export default function DepartmentCreateForm({
         className={cn(
           inDialog
             ? "w-full"
-            : "w-full rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 overflow-hidden"
+            : "w-full rounded-xl border border-border bg-card shadow-sm"
         )}
       >
-        <div className={cn(inDialog ? "px-0 py-0" : "px-4 py-6 sm:px-6 md:px-10 md:py-10")}>
-          <div className="grid grid-cols-1 gap-6 md:gap-8">
+        <div className={cn(inDialog ? "p-0" : "p-5 sm:p-6 md:p-8")}>
+          <div className="grid grid-cols-1 gap-5 md:gap-6">
             {/* Department Name */}
             <div>
-              <label className="block text-base font-semibold text-gray-900">
-                Department Name <span className="text-red-500">*</span>
+              <label className="ui-label">
+                Department Name <span className="text-destructive">*</span>
               </label>
-              <div className="mt-3">
+
+              <div className="mt-2">
                 <input
                   value={departmentName}
                   onChange={(e) => {
@@ -187,25 +182,22 @@ export default function DepartmentCreateForm({
                   }}
                   placeholder="e.g., Finance"
                   className={cn(
-                    "w-full rounded-2xl border bg-white px-5 py-4 text-base outline-none transition",
-                    "placeholder:text-gray-400",
-                    errors.departmentName
-                      ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
-                      : "border-gray-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    "ui-control",
+                    errors.departmentName &&
+                      "border-destructive focus-visible:ring-destructive/20"
                   )}
                 />
                 {errors.departmentName && (
-                  <p className="mt-2 text-sm text-red-600">{errors.departmentName}</p>
+                  <p className="mt-2 ui-error">{errors.departmentName}</p>
                 )}
               </div>
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-base font-semibold text-gray-900">
-                Description
-              </label>
-              <div className="mt-3">
+              <label className="ui-label">Description</label>
+
+              <div className="mt-2">
                 <textarea
                   value={description}
                   onChange={(e) => {
@@ -215,33 +207,40 @@ export default function DepartmentCreateForm({
                   rows={6}
                   placeholder="Optional"
                   className={cn(
-                    "w-full rounded-2xl border bg-white px-5 py-4 text-base outline-none transition",
-                    "resize-none placeholder:text-gray-400",
-                    errors.description
-                      ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
-                      : "border-gray-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                    "w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-xs",
+                    "transition-colors outline-none resize-none",
+                    "placeholder:text-muted-foreground",
+                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+                    errors.description &&
+                      "border-destructive focus-visible:ring-destructive/20"
                   )}
                 />
-                <div className="mt-2">
-                  {errors.description && (
-                    <p className="text-sm text-red-600">{errors.description}</p>
+                <div className="mt-2 flex items-start justify-between gap-3">
+                  {errors.description ? (
+                    <p className="ui-error">{errors.description}</p>
+                  ) : (
+                    <p className="ui-help">Optional (max 500 characters).</p>
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    {description.trim().length}/500
+                  </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Actions */}
-          <div className={cn(inDialog ? "mt-6" : "mt-8")}>
+          {/* Actions + Message */}
+          <div className={cn(inDialog ? "mt-5" : "mt-7")}>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
                 onClick={handleCancel}
                 disabled={submitting}
                 className={cn(
-                  "w-full sm:w-auto",
-                  "rounded-2xl border border-gray-200 bg-white px-8 py-3 text-base font-semibold text-gray-700",
-                  "hover:bg-gray-50 transition",
+                  "h-11 w-full sm:w-auto rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground shadow-xs",
+                  "transition-colors hover:bg-muted/50",
+                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   submitting && "opacity-60 cursor-not-allowed"
                 )}
               >
@@ -252,9 +251,10 @@ export default function DepartmentCreateForm({
                 type="submit"
                 disabled={submitting}
                 className={cn(
-                  "w-full sm:w-auto",
-                  "rounded-2xl px-8 py-3 text-base font-semibold text-white shadow-sm transition",
-                  submitting ? "bg-indigo-400 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
+                  "h-11 w-full sm:w-auto rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs",
+                  "transition-colors hover:opacity-90",
+                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  submitting && "opacity-70 cursor-not-allowed"
                 )}
               >
                 {submitting ? "Creating..." : "Create Department"}
@@ -265,9 +265,9 @@ export default function DepartmentCreateForm({
             {serverMsg && (
               <div
                 className={cn(
-                  "mt-4 rounded-xl border px-4 py-3 text-sm",
+                  "mt-4 rounded-lg border px-4 py-3 text-sm",
                   serverMsg.type === "success"
-                    ? "border-green-200 bg-green-50 text-green-800"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : "border-red-200 bg-red-50 text-red-800"
                 )}
               >

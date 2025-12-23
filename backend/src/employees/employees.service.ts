@@ -13,11 +13,14 @@ export class EmployeesService {
   constructor(private prisma: PrismaService) {}
 
   private parseAdDate(dateStr?: string | null): Date | null {
-    if (!dateStr) return null;
-    const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return null;
-    return d;
-  }
+  if (!dateStr) return null;
+
+  // 🔒 Force local date (NO timezone shift)
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+
+  return d;
+}
 
   private async assertDeptAndRoleBelongToCompany(
     companyId: string,

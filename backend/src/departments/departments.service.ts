@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -33,8 +34,8 @@ export class DepartmentsService {
         },
       });
     } catch (e: any) {
-      // unique constraint duplicate name
-      throw new BadRequestException("Department name already exists.");
+      // ✅ duplicate unique within company
+      throw new ConflictException("Department name already exists.");
     }
   }
 
@@ -61,11 +62,14 @@ export class DepartmentsService {
         data: {
           name: dto.name ? dto.name.trim() : undefined,
           description:
-            dto.description !== undefined ? dto.description.trim() || null : undefined,
+            dto.description !== undefined
+              ? dto.description.trim() || null
+              : undefined,
         },
       });
     } catch (e: any) {
-      throw new BadRequestException("Department name already exists.");
+      // ✅ duplicate unique within company
+      throw new ConflictException("Department name already exists.");
     }
   }
 
@@ -77,7 +81,36 @@ export class DepartmentsService {
     });
     if (!existing) throw new NotFoundException("Department not found.");
 
-    await this.prisma.department.delete({ where: { id } });
-    return { success: true };
+    // ✅ Prevent delete if employees exist under this department (BEST PRACTICE)
+    const employeeCount = await this.prisma.employee.count({
+      where: {
+        companyId,
+        departmentId: id,
+      },
+    });
+
+    if (employeeCount > 0) {
+      throw new ConflictException(
+        `Cannot delete this department because ${employeeCount} employee(s) are assigned to it. Please reassign those employees first.`
+      );
+    }
+
+    try {
+      await this.prisma.department.delete({ where: { id } });
+      return { success: true };
+    } catch (e: any) {
+      // ✅ Safety net (FK constraint / restrict)
+      // Prisma FK error is commonly P2003; Postgres is 23001 in your log
+      const prismaCode = e?.code;
+      const pgCode = e?.meta?.cause?.code || e?.meta?.code;
+
+      if (prismaCode === "P2003" || pgCode === "23001") {
+        throw new ConflictException(
+          "Cannot delete this department because it is being used by employees. Please reassign employees first."
+        );
+      }
+
+      throw e;
+    }
   }
 }

@@ -33,8 +33,21 @@ export function clearTokens() {
 }
 
 /**
- * Decode JWT exp
- * ✅ Returns exp in MILLISECONDS so you can compare with Date.now()
+ * ✅ Safe base64url decode for BOTH browser + server
+ */
+function base64UrlDecode(input: string): string {
+  const b64 = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+
+  if (typeof globalThis.atob === "function") {
+    return globalThis.atob(padded);
+  }
+  // Node.js fallback
+  return Buffer.from(padded, "base64").toString("utf-8");
+}
+
+/**
+ * Decode JWT exp → returns exp in MILLISECONDS
  */
 export function getTokenExp(token: string): number | null {
   try {
@@ -42,16 +55,9 @@ export function getTokenExp(token: string): number | null {
     if (parts.length < 2) return null;
 
     const payload = parts[1];
-
-    // base64url -> base64
-    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    // add missing padding
-    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
-
-    const json = atob(padded);
+    const json = base64UrlDecode(payload);
     const parsed = JSON.parse(json);
 
-    // JWT exp is in seconds → convert to ms
     return typeof parsed?.exp === "number" ? parsed.exp * 1000 : null;
   } catch {
     return null;
@@ -59,8 +65,7 @@ export function getTokenExp(token: string): number | null {
 }
 
 /**
- * ✅ Helper used by api.ts
- * Returns true if token expires within N seconds (default 30s)
+ * ✅ Returns true if token expires within N seconds
  */
 export function isTokenExpiringSoon(token: string, withinSeconds = 30): boolean {
   const expMs = getTokenExp(token);
@@ -69,18 +74,10 @@ export function isTokenExpiringSoon(token: string, withinSeconds = 30): boolean 
 }
 
 /**
- * ✅ Refresh Access Token (NEW BACKEND FLOW)
+ * ✅ Refresh Access Token (Backend expects refresh token in Authorization header)
  * POST /auth/refresh
  * Header: Authorization: Bearer <refresh_token>
- * Body: none
- *
- * Use plain axios here (NOT api) to avoid interceptor recursion loop.
- *
- * Backend returns:
- * { access_token, refresh_token }
- *
- * ✅ IMPORTANT: Do NOT clear tokens here on failure.
- * Let api.ts decide to logout ONLY when refresh fails during a real 401 flow.
+ * Body: {}  (IMPORTANT: do NOT send null)
  */
 export async function refreshAccessToken(): Promise<string | null> {
   const refresh_token = getRefreshToken();
@@ -89,33 +86,37 @@ export async function refreshAccessToken(): Promise<string | null> {
   const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3333/api";
 
   try {
-    const res = await axios.post(`${baseURL}/auth/refresh`, null, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${refresh_token}`,
-      },
-      timeout: 20000,
-    });
+    console.log("[TOKEN] POST /auth/refresh (Authorization Bearer refresh_token)");
+
+    // ✅ Send {} instead of null to avoid "null is not valid JSON" issues
+    const res = await axios.post(
+      `${baseURL}/auth/refresh`,
+      {}, // <-- IMPORTANT FIX
+      {
+        headers: {
+          Authorization: `Bearer ${refresh_token}`,
+        },
+        timeout: 20000,
+      }
+    );
 
     const data: any = res.data ?? {};
     const newAccess = data.access_token ?? null;
     const newRefresh = data.refresh_token ?? null;
 
-    if (!newAccess || typeof newAccess !== "string") {
-      return null;
-    }
+    if (!newAccess || typeof newAccess !== "string") return null;
 
-    // ✅ Save new access token
     if (isBrowser()) localStorage.setItem(ACCESS_KEY, newAccess);
 
-    // ✅ Save rotated refresh token (if backend returns it)
     if (newRefresh && typeof newRefresh === "string") {
       if (isBrowser()) localStorage.setItem(REFRESH_KEY, newRefresh);
     }
 
     return newAccess;
-  } catch {
-    //  Do not clear tokens here (prevents random logout on temporary errors)
+  } catch (e: any) {
+    const status = e?.response?.status;
+    const msg = e?.response?.data;
+    console.log("[TOKEN] Refresh failed ❌", status, msg);
     return null;
   }
 }

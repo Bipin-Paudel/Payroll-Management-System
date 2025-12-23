@@ -2,12 +2,14 @@ import {
   BadRequestException,
   Injectable,
   UnauthorizedException,
+  ConflictException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import { SignupDto } from "./dto/signup.dto";
 import { LoginDto } from "./dto/login.dto";
+import { Prisma } from "@prisma/client";
 
 @Injectable()
 export class AuthService {
@@ -19,9 +21,8 @@ export class AuthService {
     process.env.JWT_REFRESH_SECRET || "refresh_dev_secret_change_me";
 
   /**
-   * ✅ IMPORTANT DEFAULTS
-   * access: seen by frontend like normal session (15 minutes)
-   * refresh: long lived (30 days)
+   * access: 15 minutes (default)
+   * refresh: 30 days (default)
    */
   private accessExpiresSec =
     Number(process.env.JWT_ACCESS_EXPIRES_SEC) || 15 * 60;
@@ -37,16 +38,18 @@ export class AuthService {
     return bcrypt.compare(value, hash);
   }
 
-  private signAccessToken(userId: string, email: string, companyId: string) {
+  // ✅ companyId can be null until user creates company
+  private signAccessToken(userId: string, email: string, companyId: string | null) {
     return this.jwt.sign(
-      { sub: userId, email, companyId },
+      { sub: userId, email, companyId: companyId ?? null },
       { secret: this.accessSecret, expiresIn: this.accessExpiresSec }
     );
   }
 
-  private signRefreshToken(userId: string, email: string, companyId: string) {
+  // ✅ companyId can be null until user creates company
+  private signRefreshToken(userId: string, email: string, companyId: string | null) {
     return this.jwt.sign(
-      { sub: userId, email, companyId },
+      { sub: userId, email, companyId: companyId ?? null },
       { secret: this.refreshSecret, expiresIn: this.refreshExpiresSec }
     );
   }
@@ -59,46 +62,55 @@ export class AuthService {
     });
   }
 
-  private async getCompanyIdByUserId(userId: string): Promise<string> {
+  // ✅ SAFE: returns companyId or null (NO THROW)
+  private async getCompanyIdByUserId(userId: string): Promise<string | null> {
     const company = await this.prisma.company.findUnique({
       where: { userId },
       select: { id: true },
     });
 
-    if (!company?.id) {
-      throw new UnauthorizedException("Company not found for this user");
-    }
-
-    return company.id;
+    return company?.id ?? null;
   }
 
   async signup(dto: SignupDto) {
+    const email = dto.email.trim().toLowerCase();
+
     const exists = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+      where: { email },
       select: { id: true },
     });
-    if (exists) throw new BadRequestException("Email already in use");
+    if (exists) throw new ConflictException("Email already in use");
 
     const hashedPassword = await this.hash(dto.password);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        password: hashedPassword,
-      },
-      select: { id: true, email: true },
-    });
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+        },
+        select: { id: true, email: true },
+      });
 
-    // ✅ No company yet -> do not issue tokens until company exists
-    return {
-      user,
-      message: "Signup successful. Please create your company to continue.",
-    };
+      // ✅ No company created here (as you requested)
+      // User will login and then create company from /company/info
+      return {
+        user,
+        message: "Signup successful. Please login to create your company.",
+      };
+    } catch (e: any) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        throw new ConflictException("Email already in use");
+      }
+      throw new BadRequestException("Unable to signup user");
+    }
   }
 
   async login(dto: LoginDto) {
+    const email = dto.email.trim().toLowerCase();
+
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+      where: { email },
       select: { id: true, email: true, password: true },
     });
     if (!user) throw new UnauthorizedException("Invalid credentials");
@@ -106,6 +118,7 @@ export class AuthService {
     const ok = await this.verifyHash(dto.password, user.password);
     if (!ok) throw new UnauthorizedException("Invalid credentials");
 
+    // ✅ companyId can be null for new users
     const companyId = await this.getCompanyIdByUserId(user.id);
 
     const access_token = this.signAccessToken(user.id, user.email, companyId);
@@ -120,11 +133,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * ✅ Refresh flow (SECURE + ROTATION)
-   * RtGuard verifies refresh signature.
-   * Here we additionally verify refreshToken matches stored hashedRt.
-   */
   async refresh(userId: string, refreshToken: string) {
     if (!refreshToken) throw new UnauthorizedException("Missing refresh token");
     if (!userId) throw new UnauthorizedException("Missing user");

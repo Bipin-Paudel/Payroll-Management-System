@@ -1,8 +1,10 @@
 "use client";
 
+import React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type Status =
   | { type: ""; message: "" }
@@ -125,19 +127,19 @@ export default function CompanyInfoPage() {
 
   if (checking) {
     return (
-      <div className="min-h-[calc(100vh-64px)] bg-gray-50">
-        <div className="max-w-6xl mx-auto px-6 py-10">
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
+      <div className="min-h-[calc(100vh-64px)] bg-background">
+        <div className="mx-auto w-full max-w-6xl px-6 py-10">
+          <div className="rounded-xl border border-border bg-card shadow-sm p-6 md:p-8">
             <div className="animate-pulse space-y-4">
-              <div className="h-6 w-56 bg-gray-200 rounded" />
-              <div className="h-4 w-80 bg-gray-200 rounded" />
+              <div className="h-6 w-56 rounded bg-muted" />
+              <div className="h-4 w-80 rounded bg-muted" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                <div className="h-12 bg-gray-200 rounded-xl" />
-                <div className="h-12 bg-gray-200 rounded-xl" />
-                <div className="h-12 bg-gray-200 rounded-xl" />
-                <div className="h-12 bg-gray-200 rounded-xl" />
+                <div className="h-11 rounded bg-muted" />
+                <div className="h-11 rounded bg-muted" />
+                <div className="h-11 rounded bg-muted" />
+                <div className="h-11 rounded bg-muted" />
               </div>
-              <div className="h-10 w-40 bg-gray-200 rounded-xl mt-4" />
+              <div className="h-11 w-44 rounded bg-muted mt-4" />
             </div>
           </div>
         </div>
@@ -146,31 +148,32 @@ export default function CompanyInfoPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-gray-50">
-      <div className="max-w-6xl mx-auto px-6 py-10">
+    <div className="w-full min-h-[calc(100vh-64px)] bg-background">
+      <div className="w-full  px-6 py-10">
         {/* Header */}
-        <div className="flex flex-col gap-2 mb-6">
-          <div className="text-sm text-gray-500">
-            Settings <span className="mx-2">/</span> Company
-          </div>
+        <div className="mb-6 space-y-2">
+
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
                 Company Information
               </h1>
-              <p className="text-gray-600 mt-1">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {isEdit
                   ? "Update your company details used across payroll, reports, and exports."
                   : "Add your company details to start using the system."}
               </p>
             </div>
 
-            {/* Right side small action */}
             {isEdit && (
               <button
                 type="button"
                 onClick={() => router.push("/dashboard")}
-                className="shrink-0 rounded-xl border border-gray-200 bg-white px-4 py-2 text-gray-800 hover:bg-gray-50 transition"
+                className={cn(
+                  "h-11 shrink-0 rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground shadow-xs",
+                  "transition-colors hover:bg-muted/50",
+                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                )}
               >
                 Back to Dashboard
               </button>
@@ -179,20 +182,22 @@ export default function CompanyInfoPage() {
         </div>
 
         {/* Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Left: Company summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">
+            <div className="rounded-xl border border-border bg-card shadow-sm p-6">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-base font-semibold text-foreground">
                   Company Profile
                 </h2>
+
                 <span
-                  className={`text-xs px-2 py-1 rounded-full border ${
+                  className={cn(
+                    "text-xs px-2 py-1 rounded-full border",
                     isEdit
-                      ? "bg-green-50 text-green-700 border-green-200"
-                      : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                  }`}
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-amber-50 text-amber-800 border-amber-200"
+                  )}
                 >
                   {isEdit ? "Active" : "Not Created"}
                 </span>
@@ -207,8 +212,8 @@ export default function CompanyInfoPage() {
                 <InfoRow label="Address" value={form.address || "—"} />
               </div>
 
-              <div className="mt-6 text-xs text-gray-500 leading-relaxed">
-                Tip: Keep your email and address accurate—these appear on payroll
+              <div className="mt-6 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed">
+                Tip: Keep your email and address accurate — these appear on payroll
                 exports and internal company reports.
               </div>
             </div>
@@ -216,11 +221,12 @@ export default function CompanyInfoPage() {
             {/* Status */}
             {status.message && (
               <div
-                className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+                className={cn(
+                  "mt-4 rounded-lg border px-4 py-3 text-sm",
                   status.type === "success"
-                    ? "bg-green-50 text-green-800 border-green-200"
-                    : "bg-red-50 text-red-800 border-red-200"
-                }`}
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-red-200 bg-red-50 text-red-800"
+                )}
               >
                 {status.message}
               </div>
@@ -231,19 +237,20 @@ export default function CompanyInfoPage() {
           <div className="lg:col-span-2">
             <form
               onSubmit={onSubmit}
-              className="bg-white border border-gray-200 rounded-2xl shadow-sm"
+              className="rounded-xl border border-border bg-card shadow-sm"
             >
-              <div className="p-6 md:p-8 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Edit Details
+              <div className="border-b border-border p-6 md:p-8">
+                <h2 className="text-base font-semibold text-foreground">
+                  {isEdit ? "Edit Details" : "Company Setup"}
                 </h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  Fields marked with * are required.
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Fields marked with <span className="font-medium">*</span> are
+                  required.
                 </p>
               </div>
 
               <div className="p-6 md:p-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <Field
                     label="Company Name"
                     name="name"
@@ -308,8 +315,8 @@ export default function CompanyInfoPage() {
               </div>
 
               {/* Footer actions */}
-              <div className="px-6 md:px-8 py-5 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                <div className="text-sm text-gray-600">
+              <div className="border-t border-border bg-muted/20 px-6 py-5 md:px-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-muted-foreground">
                   {isEdit
                     ? "Changes take effect immediately."
                     : "You can update these details later from settings."}
@@ -340,7 +347,11 @@ export default function CompanyInfoPage() {
                           })
                           .finally(() => setChecking(false));
                       }}
-                      className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-gray-800 hover:bg-gray-50 transition"
+                      className={cn(
+                        "h-11 rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground shadow-xs",
+                        "transition-colors hover:bg-muted/50",
+                        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      )}
                     >
                       Reset
                     </button>
@@ -349,7 +360,12 @@ export default function CompanyInfoPage() {
                   <button
                     type="submit"
                     disabled={loading || !isValid}
-                    className="rounded-xl bg-purple-700 text-white px-5 py-2.5 hover:bg-purple-800 transition disabled:opacity-60 disabled:cursor-not-allowed font-medium"
+                    className={cn(
+                      "h-11 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow-xs",
+                      "transition-colors hover:opacity-90",
+                      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                      "disabled:opacity-60 disabled:cursor-not-allowed"
+                    )}
                   >
                     {loading
                       ? "Saving..."
@@ -363,7 +379,6 @@ export default function CompanyInfoPage() {
           </div>
         </div>
 
-        {/* Bottom spacing */}
         <div className="h-6" />
       </div>
     </div>
@@ -373,8 +388,8 @@ export default function CompanyInfoPage() {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="text-sm font-medium text-gray-900 text-right wrap-break-word max-w-[60%]">
+      <div className="text-sm text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium text-foreground text-right break-words max-w-[60%]">
         {value}
       </div>
     </div>
@@ -401,9 +416,10 @@ function Field({
   return (
     <label className="block">
       <div className="flex items-center justify-between">
-        <span className="text-gray-800 font-medium">{label}</span>
-        {required && <span className="text-xs text-gray-400">*</span>}
+        <span className="ui-label">{label}</span>
+        {required && <span className="text-xs text-muted-foreground">*</span>}
       </div>
+
       <input
         type={type}
         name={name}
@@ -411,8 +427,7 @@ function Field({
         onChange={onChange}
         placeholder={placeholder}
         required={required}
-        className="w-full mt-2 h-11 px-3 border border-gray-300 text-gray-900 rounded-xl
-                   focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
+        className="ui-control mt-2"
       />
     </label>
   );
@@ -438,16 +453,16 @@ function Select({
   return (
     <label className="block">
       <div className="flex items-center justify-between">
-        <span className="text-gray-800 font-medium">{label}</span>
-        {required && <span className="text-xs text-gray-400">*</span>}
+        <span className="ui-label">{label}</span>
+        {required && <span className="text-xs text-muted-foreground">*</span>}
       </div>
+
       <select
         name={name}
         value={value}
         onChange={onChange}
         required={required}
-        className="w-full mt-2 h-11 px-3 border border-gray-300 text-gray-900 rounded-xl
-                   focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none bg-white"
+        className="ui-control mt-2"
       >
         <option value="">{placeholder || "Select"}</option>
         {options.map((opt) => (

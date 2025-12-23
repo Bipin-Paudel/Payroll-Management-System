@@ -58,9 +58,9 @@ const groups: Group[] = [
     items: [
       { title: "Employee Records", icon: Users, path: "/settings/employees-records" },
       { title: "Company Setup", icon: Building2, path: "/company/setup" },
-      { title: "Payment Methods", icon: CreditCard, path: "/settings/payment-methods/create" },
-      { title: "Departments", icon: Layers, path: "/settings/departments/create" },
-      { title: "Roles", icon: ShieldCheck, path: "/settings/roles/create" },
+      { title: "Payment Methods", icon: CreditCard, path: "/settings/payment-methods" },
+      { title: "Departments", icon: Layers, path: "/settings/departments" },
+      { title: "Roles", icon: ShieldCheck, path: "/settings/roles" },
     ],
   },
 ];

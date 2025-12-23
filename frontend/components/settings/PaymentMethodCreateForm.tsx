@@ -2,14 +2,40 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-
-function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
+import { cn } from "@/lib/utils";
 
 const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3333/api";
 
-export default function NewPaymentMethodPage() {
+function getToken() {
+  return typeof window !== "undefined"
+    ? localStorage.getItem("access_token")
+    : null;
+}
+
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function toErrorMessage(data: any, fallback: string) {
+  const msg = data?.message || data?.error || fallback;
+  return Array.isArray(msg) ? msg.join(", ") : String(msg);
+}
+
+type Props = {
+  inDialog?: boolean;
+  onCancel?: () => void;
+  onCreated?: () => void;
+};
+
+export default function PaymentMethodCreationForm({
+  inDialog = false,
+  onCancel,
+  onCreated,
+}: Props) {
   const router = useRouter();
 
   const [paymentMethodName, setPaymentMethodName] = React.useState("");
@@ -19,13 +45,16 @@ export default function NewPaymentMethodPage() {
     paymentMethodName?: string;
     description?: string;
   }>({});
+
   const [submitting, setSubmitting] = React.useState(false);
+
+  // Page-mode only banner (dialog uses parent page banner)
   const [serverMsg, setServerMsg] = React.useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  // ✅ Auto-hide success/error after 6 seconds
+  // ✅ Auto-hide success/error after 6 seconds (page mode only)
   React.useEffect(() => {
     if (!serverMsg) return;
     const t = setTimeout(() => setServerMsg(null), 6000);
@@ -49,20 +78,18 @@ export default function NewPaymentMethodPage() {
 
   async function onSubmit(ev: React.FormEvent) {
     ev.preventDefault();
-    setServerMsg(null);
+    if (!inDialog) setServerMsg(null);
 
     if (!validate()) return;
 
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("access_token")
-        : null;
-
+    const token = getToken();
     if (!token) {
-      setServerMsg({
-        type: "error",
-        text: "Missing token. Please login again.",
-      });
+      if (!inDialog) {
+        setServerMsg({
+          type: "error",
+          text: "Missing token. Please login again.",
+        });
+      }
       return;
     }
 
@@ -81,128 +108,138 @@ export default function NewPaymentMethodPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const message = data?.message || "Failed to create payment method.";
-        throw new Error(Array.isArray(message) ? message.join(", ") : message);
+        const data = await safeJson(res);
+        throw new Error(toErrorMessage(data, "Failed to create payment method."));
       }
-
-      setServerMsg({
-        type: "success",
-        text: "Payment method created successfully.",
-      });
 
       // ✅ Clear form after success
       setPaymentMethodName("");
       setDescription("");
+      setErrors({});
 
-      // Optional redirect (keep if you want)
-      // router.push("/dashboard/payroll/payment-methods");
-    } catch (err: any) {
+      // ✅ In dialog: close + let parent show banner and refresh list
+      if (inDialog) {
+        onCreated?.();
+        return;
+      }
+
+      // ✅ Page-mode message only
       setServerMsg({
-        type: "error",
-        text: err?.message || "Something went wrong.",
+        type: "success",
+        text: "Payment method created successfully.",
       });
+      router.refresh();
+    } catch (err: any) {
+      if (!inDialog) {
+        setServerMsg({
+          type: "error",
+          text: err?.message || "Something went wrong.",
+        });
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
+  const handleCancel = () => {
+    if (inDialog) return onCancel?.();
+    router.back();
+  };
+
   return (
     <div className="w-full">
-      {/* Page header */}
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
-          Create Payment Method
-        </h1>
-        <p className="mt-2 text-sm md:text-base text-gray-600">
-          Add a payment method for payroll payouts (e.g., Bank Transfer, Cash, Cheque).
-        </p>
-      </div>
+      {/* Page header (hide inside popup) */}
+      {!inDialog && (
+        <div className="mb-6">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+            Create Payment Method
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add a payment method for payroll payouts (e.g., Bank Transfer, Cash, Cheque).
+          </p>
+        </div>
+      )}
 
-      <div className="w-full">
-        <form
-          onSubmit={onSubmit}
-          className={cn(
-            "w-full rounded-2xl bg-white shadow-sm ring-1 ring-gray-200",
-            "overflow-hidden"
-          )}
-        >
-          <div className="px-4 py-6 sm:px-6 md:px-10 md:py-10">
-            <div className="grid grid-cols-1 gap-6 md:gap-8">
-              {/* Payment Method Name */}
-              <div>
-                <label className="block text-base font-semibold text-gray-900">
-                  Payment Method Name <span className="text-red-500">*</span>
-                </label>
-                <div className="mt-3">
-                  <input
-                    value={paymentMethodName}
-                    onChange={(e) => {
-                      setPaymentMethodName(e.target.value);
-                      if (serverMsg) setServerMsg(null);
-                    }}
-                    placeholder="e.g., Bank Transfer"
-                    className={cn(
-                      "w-full rounded-2xl border bg-white px-5 py-4 text-base outline-none transition",
-                      "placeholder:text-gray-400",
-                      errors.paymentMethodName
-                        ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
-                        : "border-gray-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                    )}
-                  />
-                  {errors.paymentMethodName && (
-                    <p className="mt-2 text-sm text-red-600">
-                      {errors.paymentMethodName}
-                    </p>
+      <form
+        onSubmit={onSubmit}
+        className={cn(
+          inDialog ? "w-full" : "w-full rounded-xl border border-border bg-card shadow-sm"
+        )}
+      >
+        <div className={cn(inDialog ? "p-0" : "p-5 sm:p-6 md:p-8")}>
+          <div className="grid grid-cols-1 gap-5 md:gap-6">
+            {/* Payment Method Name */}
+            <div>
+              <label className="ui-label">
+                Payment Method Name <span className="text-destructive">*</span>
+              </label>
+              <div className="mt-2">
+                <input
+                  value={paymentMethodName}
+                  onChange={(e) => {
+                    setPaymentMethodName(e.target.value);
+                    if (!inDialog && serverMsg) setServerMsg(null);
+                  }}
+                  placeholder="e.g., Bank Transfer"
+                  className={cn(
+                    "ui-control",
+                    errors.paymentMethodName &&
+                      "border-destructive focus-visible:ring-destructive/20"
                   )}
-                </div>
+                />
+                {errors.paymentMethodName && (
+                  <p className="mt-2 ui-error">{errors.paymentMethodName}</p>
+                )}
               </div>
+            </div>
 
-              {/* Description */}
-              <div>
-                <label className="block text-base font-semibold text-gray-900">
-                  Description
-                </label>
-                <div className="mt-3">
-                  <textarea
-                    value={description}
-                    onChange={(e) => {
-                      setDescription(e.target.value);
-                      if (serverMsg) setServerMsg(null);
-                    }}
-                    rows={6}
-                    placeholder="Add notes about this payment method (Optional)"
-                    className={cn(
-                      "w-full rounded-2xl border bg-white px-5 py-4 text-base outline-none transition",
-                      "resize-none placeholder:text-gray-400",
-                      errors.description
-                        ? "border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-100"
-                        : "border-gray-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                    )}
-                  />
-                  <div className="mt-2 flex items-center justify-between">
-                    {errors.description ? (
-                      <p className="text-sm text-red-600">{errors.description}</p>
-                    ) : (
-                      <span />
-                    )}
-                  </div>
+            {/* Description */}
+            <div>
+              <label className="ui-label">Description</label>
+              <div className="mt-2">
+                <textarea
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    if (!inDialog && serverMsg) setServerMsg(null);
+                  }}
+                  rows={6}
+                  placeholder="Add notes about this payment method (Optional)"
+                  className={cn(
+                    "w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-xs",
+                    "transition-colors outline-none resize-none",
+                    "placeholder:text-muted-foreground",
+                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+                    errors.description &&
+                      "border-destructive focus-visible:ring-destructive/20"
+                  )}
+                />
+                <div className="mt-2 flex items-start justify-between gap-3">
+                  {errors.description ? (
+                    <p className="ui-error">{errors.description}</p>
+                  ) : (
+                    <p className="ui-help">Optional (max 500 characters).</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {description.trim().length}/500
+                  </p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Footer actions */}
-          <div className="border-t border-gray-100 bg-white px-4 py-4 sm:px-6 md:px-10">
+          <div className={cn(inDialog ? "mt-5" : "mt-7")}>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
-                onClick={() => router.back()}
+                onClick={handleCancel}
                 disabled={submitting}
                 className={cn(
-                  "w-full sm:w-auto",
-                  "rounded-2xl border border-gray-200 bg-white px-8 py-3 text-base font-semibold text-gray-700",
-                  "hover:bg-gray-50 transition",
+                  "h-11 w-full sm:w-auto rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground shadow-xs",
+                  "transition-colors hover:bg-muted/50",
+                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   submitting && "opacity-60 cursor-not-allowed"
                 )}
               >
@@ -213,24 +250,23 @@ export default function NewPaymentMethodPage() {
                 type="submit"
                 disabled={submitting}
                 className={cn(
-                  "w-full sm:w-auto",
-                  "rounded-2xl px-8 py-3 text-base font-semibold text-white shadow-sm transition",
-                  submitting
-                    ? "bg-indigo-400 cursor-not-allowed"
-                    : "bg-indigo-600 hover:bg-indigo-700"
+                  "h-11 w-full sm:w-auto rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs",
+                  "transition-colors hover:opacity-90",
+                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  submitting && "opacity-70 cursor-not-allowed"
                 )}
               >
                 {submitting ? "Creating..." : "Create Payment Method"}
               </button>
             </div>
 
-            {/* ✅ Message at bottom + auto-hide after 6s */}
-            {serverMsg && (
+            {/* Page-only message (dialog shows nothing here) */}
+            {!inDialog && serverMsg && (
               <div
                 className={cn(
-                  "mt-4 rounded-xl border px-4 py-3 text-sm",
+                  "mt-4 rounded-lg border px-4 py-3 text-sm",
                   serverMsg.type === "success"
-                    ? "border-green-200 bg-green-50 text-green-800"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : "border-red-200 bg-red-50 text-red-800"
                 )}
               >
@@ -238,8 +274,8 @@ export default function NewPaymentMethodPage() {
               </div>
             )}
           </div>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   );
 }

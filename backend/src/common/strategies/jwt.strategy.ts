@@ -12,14 +12,19 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
   }
 
   async validate(payload: any) {
-    if (!payload?.sub || !payload?.companyId) {
+    // ✅ userId must always exist
+    if (!payload?.sub) {
       throw new UnauthorizedException("Invalid token");
     }
+
+    // ✅ companyId can be null until company is created
+    const companyId =
+      payload.companyId === undefined ? null : (payload.companyId ?? null);
 
     return {
       id: payload.sub,
       email: payload.email,
-      companyId: payload.companyId,
+      companyId, // string | null
     };
   }
 }

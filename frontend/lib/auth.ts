@@ -1,86 +1,110 @@
-/* -------------------------- Token Management Helpers -------------------------- */
+/* -------------------------- Auth & Token Helpers -------------------------- */
+
+import { api } from "./api";
+import {
+  saveTokens,
+  getAccessToken,
+  getRefreshToken,
+  clearTokens,
+  refreshAccessToken,
+} from "./token";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3333/api";
 
-/* Save tokens */
-export function saveTokens(access: string, refresh: string, user?: any) {
-  localStorage.setItem("access_token", access);
-  localStorage.setItem("refresh_token", refresh);
-  if (user) localStorage.setItem("user", JSON.stringify(user));
+/**
+ * ✅ Login using axios api client
+ * Backend returns: { user, access_token, refresh_token }
+ */
+export async function login(email: string, password: string) {
+  const res = await api.post("/auth/login", { email, password });
+  const data: any = res.data ?? {};
+
+  if (data?.access_token && data?.refresh_token) {
+    saveTokens(data.access_token, data.refresh_token, data.user);
+  }
+
+  return data;
 }
 
-/* Get tokens */
-export function getAccessToken() {
-  return localStorage.getItem("access_token");
+/**
+ * ✅ Signup (same pattern)
+ */
+export async function signup(payload: any) {
+  const res = await api.post("/auth/signup", payload);
+  const data: any = res.data ?? {};
+
+  // If your backend also returns tokens on signup, save them
+  if (data?.access_token && data?.refresh_token) {
+    saveTokens(data.access_token, data.refresh_token, data.user);
+  }
+
+  return data;
 }
 
-export function getRefreshToken() {
-  return localStorage.getItem("refresh_token");
-}
-
-/* Remove tokens */
-export function clearTokens() {
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
-  localStorage.removeItem("user");
-}
-
-/* Refresh token if expired */
-export async function refreshAccessToken() {
-  const refresh = getRefreshToken();
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-
-  if (!refresh || !user?.id) return null;
-
+/**
+ * ✅ Logout (calls backend, then clears tokens)
+ */
+export async function logout() {
   try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: user.id,
-        refresh_token: refresh,
-      }),
-    });
-
-    if (!res.ok) throw new Error("Failed to refresh");
-
-    const data = await res.json();
-    saveTokens(data.access_token, data.refresh_token);
-    return data.access_token;
-  } catch (err) {
-    console.error("Token refresh failed", err);
+    await api.post("/auth/logout");
+  } catch {
+    // ignore (token may already be invalid)
+  } finally {
     clearTokens();
-    window.location.href = "/login";
+    if (typeof window !== "undefined") window.location.href = "/login";
   }
 }
 
-/* Automatically attach access token & refresh if needed */
+/**
+ * ✅ fetchWithAuth helper (kept for places you still use fetch)
+ * - Attaches access token
+ * - If 401 -> refresh once -> retry
+ *
+ * IMPORTANT:
+ * - refreshAccessToken() in token.ts already follows your backend:
+ *   POST /auth/refresh with Authorization: Bearer <refresh_token>
+ */
 export async function fetchWithAuth(url: string, options: RequestInit = {}) {
+  const isBrowser = typeof window !== "undefined";
+
   let token = getAccessToken();
-  if (!token) token = await refreshAccessToken();
 
-  const res = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  // If token expired, try refresh once
-  if (res.status === 401) {
+  // If no access token but refresh token exists, try to refresh once
+  if (!token && getRefreshToken()) {
     token = await refreshAccessToken();
-    if (token) {
-      return fetch(`${API_BASE}${url}`, {
-        ...options,
-        headers: {
-          ...(options.headers || {}),
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+  }
+
+  const doFetch = async (t?: string | null) => {
+    const headers = new Headers(options.headers as any);
+
+    // Do not override content-type if caller is sending FormData
+    const isFormData =
+      typeof FormData !== "undefined" && options.body instanceof FormData;
+
+    if (!isFormData && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
     }
+
+    if (t) headers.set("Authorization", `Bearer ${t}`);
+
+    const fullUrl = buildUrl(url);
+    return fetch(fullUrl, { ...options, headers });
+  };
+
+  // First attempt
+  let res = await doFetch(token);
+
+  // If unauthorized, try refresh once
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+
+    if (!newToken) {
+      clearTokens();
+      if (isBrowser) window.location.href = "/login";
+      return res;
+    }
+
+    res = await doFetch(newToken);
   }
 
   return res;
@@ -103,5 +127,6 @@ export const authHeader = () => {
 
 /* -------------------------- Current Company Helper ------------------------- */
 export const getCurrentCompanyId = (): string | null => {
+  if (typeof window === "undefined") return null;
   return localStorage.getItem("current_company_id");
 };

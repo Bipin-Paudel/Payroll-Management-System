@@ -21,21 +21,21 @@ export class RolesController {
 
   @Post()
   create(@Req() req: any, @Body() dto: CreateRoleDto) {
-    return this.service.create(req.user.id, dto);
+    return this.service.create(req.user.companyId, dto);
   }
 
   @Get()
   list(@Req() req: any) {
-    return this.service.list(req.user.id);
+    return this.service.list(req.user.companyId);
   }
 
   @Patch(":id")
   update(@Req() req: any, @Param("id") id: string, @Body() dto: UpdateRoleDto) {
-    return this.service.update(req.user.id, id, dto);
+    return this.service.update(req.user.companyId, id, dto);
   }
 
   @Delete(":id")
   remove(@Req() req: any, @Param("id") id: string) {
-    return this.service.remove(req.user.id, id);
+    return this.service.remove(req.user.companyId, id);
   }
 }
